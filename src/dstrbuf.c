@@ -4,6 +4,30 @@
 #include "dstrbuf.h"
 #include "dutil.h"
 
+int nStringBufferResizeCount=0;
+int nReallocBlockChangedCount=0;
+
+enum
+{
+	RESIZED_BY_ON_DEMAND,	// given_size
+	RESIZED_BY_FIXED_SIZE,	// n*FIXED_SIZE, n*FIXED_SIZE >= given_size	(maybe plus the old_size)
+	RESIZED_BY_DOUBLE_IT,	// old_size * 2
+	RESIZED_BY_FIXED_SIZE_2,	// n*FIXED_SIZE + m*FIXED_SIZE, m: resizedCount
+	/*
+	When send email with an 2.8M attachment:
+	RESIZED_BY_ON_DEMAND:  nStringBufferResizeCount=992695, nReallocBlockChangedCount=9
+	RESIZED_BY_FIXED_SIZE: nStringBufferResizeCount=947, nReallocBlockChangedCount=9; 4096(4K) block size
+						   nStringBufferResizeCount=380, nReallocBlockChangedCount=9; 10240(10K) block size
+						   nStringBufferResizeCount=97, nReallocBlockChangedCount=9; 40960(40K) block size
+						   nStringBufferResizeCount=40, nReallocBlockChangedCount=8; 102400(100K) block size
+						   nStringBufferResizeCount=380, nReallocBlockChangedCount=9; 10240(10K) block size
+	RESIZED_BY_DOUBLE_IT:  nStringBufferResizeCount=17, nReallocBlockChangedCount=10
+	*/
+};
+const int DEFAULT_RESIZE_BLOCK_SIZE = 4096;
+static int currentResizeMethod = RESIZED_BY_FIXED_SIZE_2;
+static int currentResizeBlockSize = 4096;
+
 /*
  * Create a new dstrbuf.
  *
@@ -21,6 +45,7 @@ dsbNew(size_t size)
 	ret->str = xmalloc(size + 1);
 	ret->size = size;
 	ret->len = 0;
+	ret->resizedCount = 0;
 	return ret;
 }
 
@@ -35,9 +60,34 @@ void
 dsbResize(dstrbuf *dsb, size_t newsize)
 {
 	assert(dsb != NULL);
-	dsb->str = xrealloc(dsb->str, newsize + 1);
-	dsb->str[newsize] = '\0';
-	dsb->size = newsize;
+	char *old_str=dsb->str;
+
+	dsb->resizedCount++;
+	size_t realsize = 0;
+	switch (currentResizeMethod)
+	{
+		case RESIZED_BY_FIXED_SIZE:
+			realsize = (newsize / currentResizeBlockSize + 1)  * currentResizeBlockSize + 1;
+			break;
+		case RESIZED_BY_FIXED_SIZE_2:
+			realsize = (newsize / currentResizeBlockSize + dsb->resizedCount)  * currentResizeBlockSize + 1;
+			break;
+		case RESIZED_BY_DOUBLE_IT:
+			if (dsb->size*2 <= newsize) realsize = newsize + 1;
+			else realsize = dsb->size * 2 + 1;
+			break;
+		case RESIZED_BY_ON_DEMAND:
+		default:
+			realsize = newsize + 1;
+			break;
+	}
+	dsb->str = xrealloc(dsb->str, realsize);
+	//dsb->str[newsize] = '\0';
+	memset (dsb->str+dsb->len, 0, realsize-dsb->len);
+	dsb->size = realsize;
+
+	nStringBufferResizeCount++;
+	if (old_str != dsb->str) nReallocBlockChangedCount++;
 }
 
 /*

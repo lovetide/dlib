@@ -7,13 +7,13 @@ typedef void (*dlistDestroyFunc)(void *data);
 typedef struct _dlist {
 	size_t size;
 	struct dlistnode *save;
-	struct dlistnode *list;
+	struct dlistnode *top;
 	dlistDestroyFunc destroy;
 } *dlist;
 
 dlist dlInit(dlistDestroyFunc destroy);
 void dlInsertTop(dlist ref, void *data);
-void dlInsertEnd(dlist ref, void *data);
+void dlAppend(dlist ref, void *data);
 void dlCopy(dlist src, dlist dest);
 void dlReset(dlist ref);
 void *dlGetNext(dlist ref);

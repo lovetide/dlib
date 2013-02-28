@@ -27,7 +27,7 @@ dlInit(dlistDestroyFunc destroy)
 {
 	dlist ptr = xmalloc(sizeof(struct _dlist));
 	ptr->size = 0;
-	ptr->list = NULL;
+	ptr->top = NULL;
 	ptr->save = NULL;
 	ptr->destroy = destroy;
 	return ptr;
@@ -53,16 +53,16 @@ dlInsertTop(dlist ref, void *data)
 	// The next pointer should point to what's currently
 	// at the top of the list. Then, point the top of the list
 	// to this node we just created.
-	ret->next = ref->list;
-	ref->list = ret;
+	ret->next = ref->top;
+	ref->top = ret;
 
 	// Reset the "save" pointer to point to our new node.
-	ref->save = ref->list;
+	ref->save = ref->top;
 	ref->size++;
 }
 
 void
-dlInsertEnd(dlist ref, void *data)
+dlAppend(dlist ref, void *data)
 {
 	struct dlistnode *current;
 	struct dlistnode *ret = xmalloc(sizeof(struct dlistnode));
@@ -75,10 +75,18 @@ dlInsertEnd(dlist ref, void *data)
 		ret->data = NULL;
 	}
 
-	for (current = ref->list; current->next; current = current->next) {
-		; /* Just get to the end of the list. */
+	current = ref->top;
+	if (current)
+	{
+		for (; current->next; current = current->next) {
+			; /* Just get to the end of the list. */
+		}
+		current->next = ret;
 	}
-	current->next = ret;
+	else
+	{
+		ref->save = ref->top = ret;
+	}
 	ref->size++;
 }
 
@@ -89,7 +97,7 @@ void
 dlCopy(dlist to, dlist from)
 {
 	struct dlistnode *current = NULL;
-	for (current = from->list; current; current = current->next) {
+	for (current = from->top; current; current = current->next) {
 		dlInsertTop(to, current->data);
 	}
 }
@@ -101,7 +109,7 @@ dlCopy(dlist to, dlist from)
 void
 dlReset(dlist ref)
 {
-	ref->save = ref->list;
+	ref->save = ref->top;
 }
 
 /**
@@ -124,7 +132,7 @@ dlGetNext(dlist ref)
 			ref->save = ref->save->next;
 		} else {
 			data = NULL;
-			ref->save = ref->list;
+			ref->save = ref->top;
 		}
 	}
 	return data;
@@ -137,7 +145,7 @@ void
 dlDestroy(dlist ref)
 {
 	struct dlistnode *tmp = NULL;
-	struct dlistnode *first = ref->list;
+	struct dlistnode *first = ref->top;
 
 	for (; first; first = tmp) {
 		tmp = first->next;
@@ -156,21 +164,21 @@ dlDestroy(dlist ref)
 void
 dlPop(dlist ref)
 {
-	struct dlistnode *hold=NULL, *tmp=ref->list;
+	struct dlistnode *hold=NULL, *tmp=ref->top;
 
 	hold = tmp->next;
 	if (ref->destroy && tmp->data) {
 		ref->destroy(tmp->data);
 	}
 	xfree(tmp);
-	ref->list = hold;
-	ref->save = ref->list;
+	ref->top = hold;
+	ref->save = ref->top;
 	ref->size--;
 }
 
 void *
 dlGetTop(dlist ref)
 {
-	return ref->list->data;
+	return ref->top->data;
 }
 

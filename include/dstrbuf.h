@@ -10,6 +10,7 @@ typedef struct __dstrbuf {
 	char *str;
 	size_t size;
 	size_t len;
+	int resizedCount;
 } dstrbuf;
 
 dstrbuf *dsbNew(size_t size);
